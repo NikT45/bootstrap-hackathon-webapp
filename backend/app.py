@@ -36,6 +36,17 @@ def analyze_conversation_response(emotions, transcriptions, eval_metric):
     1. What specific part of the conversation led to this classification
     2. Why it's good/bad in the context of {eval_metric}
     3. What emotions from speaker 1 might have influenced this
+    
+    IMPORTANT: At the end of your analysis, provide a numerical score from 0-100 where:
+    - 0-20: Aggressive/Defensive (poor performance, major mistakes)
+    - 21-40: Dubious moves (questionable choices, awkward timing)
+    - 41-60: Tactical/Positional (strategic but not exceptional)
+    - 61-80: Good moves (solid performance, good responses)
+    - 81-100: Excellent moves (outstanding performance, perfect responses)
+    
+    Format your response as:
+    ANALYSIS: [your detailed analysis here]
+    SCORE: [number between 0-100]
     """
     conversation_analysis = "\n".join([f"Speaker{turn['speaker']}: {turn['text']}" for turn in transcriptions])
     response = client.chat.completions.create(
@@ -45,7 +56,7 @@ def analyze_conversation_response(emotions, transcriptions, eval_metric):
             {"role":"user", "content": f"Analyze the following conversation:\n\n {conversation_analysis}"}
         ],
         # Temperature is the randomness of the response, 0.0 is the most deterministic, 1.0 is the most random
-        temperature = 0.3
+        temperature = 0.2
     )
     return response.choices[0].message.content
         
@@ -57,10 +68,38 @@ def analyze_conversation():
         transcriptions = data.get('transcriptions', [])
         eval_metric = data.get('eval_metric', 'general conversation')
 
-        analysis = analyze_conversation_response(emotions, transcriptions, eval_metric)
-        return jsonify({'success': True, 'analysis': analysis, 'eval_metric': eval_metric})
+        response_text = analyze_conversation_response(emotions, transcriptions, eval_metric)
+        
+        # Parse the response to extract analysis and score
+        lines = response_text.split('\n')
+        analysis = ""
+        score = 50  # Default score if parsing fails
+        
+        for line in lines:
+            if line.startswith('ANALYSIS:'):
+                analysis = line.replace('ANALYSIS:', '').strip()
+            elif line.startswith('SCORE:'):
+                try:
+                    score = int(line.replace('SCORE:', '').strip())
+                    # Ensure score is within valid range
+                    score = max(0, min(100, score))
+                except ValueError:
+                    score = 50  # Default if parsing fails
+        
+        # If no ANALYSIS: line found, use the entire response as analysis
+        if not analysis:
+            analysis = response_text
+        
+        return jsonify({
+            'success': True, 
+            'analysis': analysis, 
+            'score': score,
+            'eval_metric': eval_metric
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# Progress bar value (score) is now included in the analyze_conversation endpoint
 
 
 
