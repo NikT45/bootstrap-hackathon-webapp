@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from openai import OpenAI
 import os 
 import json 
@@ -10,15 +11,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 
 # Recieve emotions and transcriptions from the frontend ]
 # Recieve the eval metric (what are we evaluating the conversation on?)
 # Return portions of the conversation related to the eval metric, and classify them in chess terms. 
 def analyze_conversation_response(emotions, transcriptions, eval_metric):
-    # Initialize the OpenAI client
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    context = f"""
+    try:
+        print(f"🔑 OpenAI API Key exists: {bool(os.getenv('OPENAI_API_KEY'))}")
+        # Initialize the OpenAI client
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        context = f"""
     You are analyzing a conversation in chess terms. The situation is: {eval_metric}
     
     Speaker 0 is the person being evaluated. Speaker 1's emotions: {emotions}
@@ -48,27 +53,40 @@ def analyze_conversation_response(emotions, transcriptions, eval_metric):
     ANALYSIS: [your detailed analysis here]
     SCORE: [number between 0-100]
     """
-    conversation_analysis = "\n".join([f"Speaker{turn['speaker']}: {turn['text']}" for turn in transcriptions])
-    response = client.chat.completions.create(
-        model = "gpt-5-nano",
-        messages = [
-            {"role":"system", "content":context},
-            {"role":"user", "content": f"Analyze the following conversation:\n\n {conversation_analysis}"}
-        ],
-        # Temperature is the randomness of the response, 0.0 is the most deterministic, 1.0 is the most random
-        temperature = 0.2
-    )
-    return response.choices[0].message.content
+        conversation_analysis = "\n".join([f"Speaker{turn['speaker']}: {turn['text']}" for turn in transcriptions])
+        print(f"📝 Conversation analysis: {conversation_analysis}")
+        
+        response = client.chat.completions.create(
+            model = "gpt-4o-mini",
+            messages = [
+                {"role":"system", "content":context},
+                {"role":"user", "content": f"Analyze the following conversation:\n\n {conversation_analysis}"}
+            ],
+            # Temperature is the randomness of the response, 0.0 is the most deterministic, 1.0 is the most random
+            temperature = 0.2
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"❌ Error in analyze_conversation_response: {str(e)}")
+        return f"ANALYSIS: Error analyzing conversation: {str(e)}\nSCORE: 50"
         
 @app.route('/analyze_conversation', methods=['POST'])
 def analyze_conversation():
     try:
+        print("📥 Received request to /analyze_conversation")
         data = request.get_json()
+        print(f"📋 Request data: {data}")
+        
         emotions = data.get('emotions', [])
         transcriptions = data.get('transcriptions', [])
         eval_metric = data.get('eval_metric', 'general conversation')
+        
+        print(f"🎭 Emotions: {emotions}")
+        print(f"💬 Transcriptions: {transcriptions}")
+        print(f"📊 Eval metric: {eval_metric}")
 
         response_text = analyze_conversation_response(emotions, transcriptions, eval_metric)
+        print(f"🤖 GPT Response: {response_text}")
         
         # Parse the response to extract analysis and score
         lines = response_text.split('\n')
@@ -90,6 +108,7 @@ def analyze_conversation():
         if not analysis:
             analysis = response_text
         
+        print(f"✅ Returning response - Score: {score}, Analysis: {analysis[:100]}...")
         return jsonify({
             'success': True, 
             'analysis': analysis, 
@@ -97,6 +116,10 @@ def analyze_conversation():
             'eval_metric': eval_metric
         })
     except Exception as e:
+        print(f"❌ Error in analyze_conversation endpoint: {str(e)}")
+        print(f"❌ Error type: {type(e)}")
+        import traceback
+        print(f"❌ Traceback: {traceback.format_exc()}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # Progress bar value (score) is now included in the analyze_conversation endpoint

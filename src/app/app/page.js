@@ -7,6 +7,10 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [utterances, setUtterances] = useState([]);
   const [partialTranscript, setPartialTranscript] = useState('');
+  const [evaluationScore, setEvaluationScore] = useState(50);
+  const [evaluationAnalysis, setEvaluationAnalysis] = useState('');
+  const [evalMetric, setEvalMetric] = useState('rizz');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
 
@@ -45,11 +49,59 @@ export default function App() {
     }
   };
 
+  const analyzeConversation = async (currentUtterances) => {
+    try {
+      setIsAnalyzing(true);
+      
+      // Format utterances for backend
+      const transcriptions = currentUtterances.map(utterance => ({
+        speaker: utterance.speaker,
+        text: utterance.text
+      }));
+
+      console.log('🧠 Analyzing conversation with', transcriptions.length, 'utterances');
+      console.log('📤 Sending to backend:', { transcriptions, emotions: [], eval_metric: evalMetric });
+
+      const response = await fetch('http://127.0.0.1:5000/analyze_conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transcriptions: transcriptions,
+          emotions: [],
+          eval_metric: evalMetric
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('📊 Analysis result:', result);
+        setEvaluationScore(result.score);
+        setEvaluationAnalysis(result.analysis);
+      } else {
+        console.error('❌ Analysis error:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ Failed to analyze conversation:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const startConversation = async () => {
     try {
       setError('');
       setUtterances([]);
       setPartialTranscript('');
+      setEvaluationScore(50);
+      setEvaluationAnalysis('');
+      setIsAnalyzing(false);
       setStatus('Getting API key...');
 
       // Get Deepgram API key from server
@@ -118,7 +170,12 @@ export default function App() {
               console.log('👥 Processing words with speakers:', alternative.words);
               const groupedUtterances = groupWordsBySpeaker(alternative.words);
               if (groupedUtterances.length > 0) {
-                setUtterances(prev => [...prev, ...groupedUtterances]);
+                setUtterances(prev => {
+                  const newUtterances = [...prev, ...groupedUtterances];
+                  // Trigger analysis after adding new utterances
+                  setTimeout(() => analyzeConversation(newUtterances), 500);
+                  return newUtterances;
+                });
               }
             } else if (alternative.transcript.trim()) {
               // Fallback if no words array but we have transcript
@@ -128,7 +185,12 @@ export default function App() {
                 text: alternative.transcript,
                 timestamp: Date.now()
               };
-              setUtterances(prev => [...prev, newUtterance]);
+              setUtterances(prev => {
+                const newUtterances = [...prev, newUtterance];
+                // Trigger analysis after adding new utterance
+                setTimeout(() => analyzeConversation(newUtterances), 500);
+                return newUtterances;
+              });
             }
             
             setPartialTranscript('');
@@ -253,11 +315,61 @@ export default function App() {
     return utterances;
   };
 
+  // Helper function to get color based on score
+  const getScoreColor = (score) => {
+    if (score >= 81) return 'bg-green-500';
+    if (score >= 61) return 'bg-blue-500';
+    if (score >= 41) return 'bg-yellow-500';
+    if (score >= 21) return 'bg-orange-500';
+    return 'bg-red-500';
+  };
+
+  const getScoreLabel = (score) => {
+    if (score >= 81) return 'Excellent';
+    if (score >= 61) return 'Good';
+    if (score >= 41) return 'Tactical';
+    if (score >= 21) return 'Dubious';
+    return 'Poor';
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-8">
-      <div className="text-center max-w-4xl w-full">
-        <h1 className="text-3xl font-bold mb-8">Real-time Speaker Diarization</h1>
-        <p className="text-gray-600 mb-8">Powered by Deepgram's live streaming API with speaker identification</p>
+    <div className="min-h-screen p-8">
+      {/* Evaluation Bar at Top */}
+      <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 p-4 z-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium text-gray-700 min-w-[120px]">
+              {evalMetric.charAt(0).toUpperCase() + evalMetric.slice(1)} Score:
+            </span>
+            <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-500 ${getScoreColor(evaluationScore)}`}
+                style={{ width: `${evaluationScore}%` }}
+              />
+            </div>
+            <span className="text-sm font-semibold text-gray-700 min-w-[80px]">
+              {evaluationScore}/100
+            </span>
+            {isAnalyzing && (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <span className="text-sm text-blue-600">Analyzing...</span>
+              </div>
+            )}
+          </div>
+          {evaluationAnalysis && (
+            <div className="mt-2 text-sm text-gray-600 bg-gray-50 p-2 rounded">
+              <strong>Analysis:</strong> {evaluationAnalysis}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="pt-20 flex items-center justify-center">
+        <div className="text-center max-w-4xl w-full">
+          <h1 className="text-3xl font-bold mb-8">Real-time Speaker Diarization</h1>
+          <p className="text-gray-600 mb-8">Powered by Deepgram's live streaming API with AI conversation analysis</p>
 
         {!isRecording ? (
           <button
@@ -328,15 +440,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Info about Deepgram features */}
-        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="font-semibold text-blue-800 mb-2">Deepgram Features Enabled:</h3>
-          <div className="text-sm text-blue-700 space-y-1">
-            <p>✅ Real-time speaker diarization</p>
-            <p>✅ Smart formatting & punctuation</p>
-            <p>✅ Interim results for immediate feedback</p>
-            <p>✅ Nova-2 model for high accuracy</p>
-          </div>
         </div>
       </div>
     </div>
