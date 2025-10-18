@@ -21,6 +21,7 @@ export default function App() {
   const streamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const analysisTimeoutRef = useRef(null);
+  const transcriptionContainerRef = useRef(null);
 
 
 
@@ -160,6 +161,13 @@ export default function App() {
     }
   };
 
+  // Function to scroll to bottom of transcription container
+  const scrollToBottom = () => {
+    if (transcriptionContainerRef.current) {
+      transcriptionContainerRef.current.scrollTop = transcriptionContainerRef.current.scrollHeight;
+    }
+  };
+
   // Debounced analysis for new utterances
   const scheduleAnalysisForNewUtterance = (newUtterance, allUtterances) => {
     // Clear any existing timeout
@@ -212,7 +220,7 @@ export default function App() {
         body: JSON.stringify({
           transcriptions: transcriptions,
           new_text: newUtterance.text,
-          emotions: latestEmotions.current,
+          emotions: latestEmotions,
           eval_metric: evalMetric
         })
       });
@@ -226,7 +234,15 @@ export default function App() {
       if (result.success) {
         console.log('📊 Analysis result:', result);
         
-        setEvaluationScore(result.score);
+        // Apply score multiplier to current score
+        const scoreMultiplier = result.score_multiplier || 1.0;
+        setEvaluationScore(prevScore => {
+          const newScore = Math.round(prevScore * scoreMultiplier);
+          // Keep score within bounds (0-100)
+          const boundedScore = Math.max(0, Math.min(100, newScore));
+          console.log(`📊 Score update: ${prevScore} × ${scoreMultiplier} = ${newScore} → ${boundedScore}`);
+          return boundedScore;
+        });
         
         // Add new moves with the utterance reference
         if (result.moves && result.moves.length > 0) {
@@ -336,6 +352,8 @@ export default function App() {
                   if (lastNewUtterance && lastNewUtterance.speaker === 0) {
                     scheduleAnalysisForNewUtterance(lastNewUtterance, newUtterances);
                   }
+                  // Scroll to bottom to show new utterances
+                  setTimeout(scrollToBottom, 100);
                   return newUtterances;
                 });
               }
@@ -353,6 +371,8 @@ export default function App() {
                 if (newUtterance.speaker === 0) {
                   scheduleAnalysisForNewUtterance(newUtterance, newUtterances);
                 }
+                // Scroll to bottom to show new utterance
+                setTimeout(scrollToBottom, 100);
                 return newUtterances;
               });
             }
@@ -641,7 +661,7 @@ export default function App() {
       <div className="pt-20 flex items-center justify-center">
         <div className="text-center max-w-4xl w-full">
           <h1 className="text-3xl font-bold mb-8">Real-time Speaker Diarization</h1>
-          <p className="text-gray-600 mb-8">Powered by Deepgram's live streaming API with AI conversation analysis</p>
+          <p className="text-gray-600 mb-8">Powered by Deepgram&apos;s live streaming API with AI conversation analysis</p>
 
         {!isRecording ? (
           <button
@@ -680,7 +700,7 @@ export default function App() {
 
         {/* Live transcription with speaker labels */}
         {(utterances.length > 0 || partialTranscript) && (
-          <div className="mt-6 bg-white border border-gray-200 rounded-lg p-6 text-left max-h-96 overflow-y-auto">
+          <div className="mt-6 bg-white border border-gray-200 rounded-lg p-6 text-left max-h-96 overflow-y-auto" ref={transcriptionContainerRef}>
             <h2 className="text-xl font-semibold mb-4">Live Transcription with Speakers:</h2>
             
             {/* Display completed utterances with speaker labels */}

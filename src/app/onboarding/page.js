@@ -37,7 +37,7 @@ export default function Onboarding() {
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-4">Welcome!</h1>
           <p className="text-lg text-gray-600">
-            Let's get you started with your new app.
+            Let&apos;s get you started with your new app.
           </p>
         </div>
 
@@ -57,7 +57,7 @@ export default function Onboarding() {
               <div>
                 <h3 className="font-semibold">Camera Access</h3>
                 <p className="text-sm text-gray-600">
-                  We'll need access to your camera
+                  We&apos;ll need access to your camera
                 </p>
               </div>
             </div>
@@ -69,7 +69,7 @@ export default function Onboarding() {
               <div>
                 <h3 className="font-semibold">Microphone Access</h3>
                 <p className="text-sm text-gray-600">
-                  We'll need access to your microphone
+                  We&apos;ll need access to your microphone
                 </p>
               </div>
             </div>

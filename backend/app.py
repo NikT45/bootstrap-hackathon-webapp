@@ -21,9 +21,9 @@ def analyze_conversation_response(emotions, transcriptions, eval_metric, new_tex
         # Initialize the OpenAI client
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        # If no new text to analyze, return empty
+        # If no new text to analyze, return neutral multiplier
         if not new_text or not new_text.strip():
-            return {"score": 50, "moves": []}
+            return {"score_multiplier": 1.0, "moves": []}
         
         print(f"📝 New text to analyze: '{new_text}'")
         
@@ -44,7 +44,7 @@ Analyze ONLY the new text provided below using these chess move types:
 - BEST: Optimal choice in the situation
 - EXCELLENT: Strong response, clearly beneficial
 - GOOD: Solid choice, generally positive
-- BOOK: Standard, intro level, expected response (neutral)
+- BOOK: Standard, extremely predictable expected responses (neutral)
     - Example: "Hey how are you?", "I'm doing well, thanks for asking"
 - INACCURACY: Minor mistake, slightly off but not harmful
 - MISTAKE: Clear error, poor choice with negative impact
@@ -95,7 +95,12 @@ IMPORTANT:
 - Only analyze the NEW TEXT provided below, not the conversation context
 - Return the exact substring that should be highlighted
 - You can identify multiple moves within the same text if appropriate
-- Provide an overall score from 0-100 based on the move quality
+- Provide a score multiplier from 0.5 to 2.0 based on the move quality:
+  * 0.5-0.7: Very negative moves (BLUNDER, major MISTAKE)
+  * 0.8-0.9: Slightly negative moves (minor MISTAKE, INACCURACY)
+  * 1.0: Neutral moves (BOOK, standard responses)
+  * 1.1-1.3: Positive moves (GOOD, EXCELLENT)
+  * 1.4-2.0: Exceptional moves (GREAT, BEST, BRILLIANT)
 
 Format your response as JSON only, no other text:
 {{
@@ -106,7 +111,7 @@ Format your response as JSON only, no other text:
             "reason": "brief reason"
         }}
     ],
-    "score": 75
+    "score_multiplier": 1.0
 }}{conversation_context}"""
         
         response = client.chat.completions.create(
@@ -130,11 +135,11 @@ Format your response as JSON only, no other text:
             result = json.loads(json_str)
             return result
         else:
-            return {"score": 50, "moves": []}
+            return {"score_multiplier": 1.0, "moves": []}
             
     except Exception as e:
         print(f"❌ Error in analyze_conversation_response: {str(e)}")
-        return {"score": 50, "moves": []}
+        return {"score_multiplier": 1.0, "moves": []}
         
 @app.route('/analyze_conversation', methods=['POST'])
 def analyze_conversation():
@@ -156,13 +161,13 @@ def analyze_conversation():
         response_data = analyze_conversation_response(emotions, transcriptions, eval_metric, new_text)
         print(f"🤖 GPT Response: {response_data}")
         
-        score = response_data.get('score', 50)
+        score_multiplier = response_data.get('score_multiplier', 1.0)
         moves = response_data.get('moves', [])
         
-        print(f"✅ Returning response - Score: {score}, Moves: {len(moves)}")
+        print(f"✅ Returning response - Score Multiplier: {score_multiplier}, Moves: {len(moves)}")
         return jsonify({
             'success': True, 
-            'score': score,
+            'score_multiplier': score_multiplier,
             'moves': moves,
             'eval_metric': eval_metric
         })
