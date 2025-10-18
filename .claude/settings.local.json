@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install openai)",
+      "Bash(npm uninstall openai)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
