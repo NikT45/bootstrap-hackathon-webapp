@@ -2,22 +2,129 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk';
-
+import Webcam from 'react-webcam';
 export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [utterances, setUtterances] = useState([]);
   const [partialTranscript, setPartialTranscript] = useState('');
   const [evaluationScore, setEvaluationScore] = useState(50);
   const [evaluationAnalysis, setEvaluationAnalysis] = useState('');
-  const [evalMetric, setEvalMetric] = useState('rizz');
+  const [evalMetric, setEvalMetric] = useState('romance');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  const [moves, setMoves] = useState([]);
+  const [lastAnalyzedUtterance, setLastAnalyzedUtterance] = useState(null);
 
   const deepgramRef = useRef(null);
   const connectionRef = useRef(null);
   const streamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
+  const analysisTimeoutRef = useRef(null);
+
+
+
+
+  const API_KEY = process.env.NEXT_PUBLIC_HUME_API_KEY;
+  // debug log so devs can see in browser console whether the env is exposed
+  if (typeof window !== 'undefined') {
+    console.debug('NEXT_PUBLIC_HUME_API_KEY:', API_KEY);
+  }
+  const endpoint = `wss://api.hume.ai/v0/stream/models?api_key=${API_KEY}`;
+  const webcamRef = useRef(null);
+  const emotionData = useRef([]);
+  //const [isRecording, setIsRecording] = useState(false);
+  const [latestEmotions, setLatestEmotions] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [debugInfo, setDebugInfo] = useState('');
+  const wsRef = useRef(null);
+  const intervalRef = useRef(null);
+  
+  const startEmotionDetection = () => {
+    console.log('🚀 Starting emotion detection...');
+    setConnectionStatus('connecting');
+    
+    wsRef.current = new WebSocket(endpoint);
+    let count = 0;
+
+    wsRef.current.onopen = () => {
+      console.log("✅ Connected to Hume AI WebSocket");
+      setConnectionStatus('connected');
+
+      const intervalTime = 1000;
+      intervalRef.current = setInterval(() => {
+        if (!webcamRef.current) {
+          console.warn('⚠️ Webcam ref not available');
+          setDebugInfo('Webcam not initialized');
+          return;
+        }
+
+        const imageData = webcamRef.current.getScreenshot();
+        console.log('📸 Screenshot captured:', imageData ? 'Yes' : 'No');
+        
+        if (imageData) {
+          const base64Data = imageData.split(",")[1];
+          const message = {
+            data: base64Data,
+            models: { face: {} },
+          };
+          wsRef.current.send(JSON.stringify(message));
+          count++;
+          setDebugInfo(`Sent ${count} frames`);
+          console.log(`📤 Sent frame #${count}`);
+        } else {
+          setDebugInfo('No screenshot data available');
+        }
+      }, intervalTime);
+    };
+    
+    wsRef.current.onmessage = (event) => {
+      console.log('📨 Received message from Hume');
+      const response = JSON.parse(event.data);
+      console.log('Full response:', response);
+      
+      if (
+        response.face &&
+        response.face.predictions &&
+        response.face.predictions[0] &&
+        response.face.predictions[0].emotions
+      ) {
+        const emotions = response.face.predictions[0].emotions;
+        emotionData.current.push(emotions);
+        console.log('😊 Emotions detected:', emotions);
+        setLatestEmotions(emotions);
+        setDebugInfo(`Received ${emotionData.current.length} emotion responses`);
+      } else {
+        console.log('⚠️ Response structure unexpected:', response);
+        setDebugInfo('Received response but no emotions found');
+      }
+    };
+    
+    wsRef.current.onerror = (error) => {
+      console.error('❌ WebSocket error:', error);
+      setConnectionStatus('error');
+      setDebugInfo('WebSocket error - check console');
+    };
+    
+    wsRef.current.onclose = () => {
+      console.log('🔌 WebSocket closed');
+      setConnectionStatus('disconnected');
+    };
+  };
+
+  // cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (wsRef.current) {
+        try { wsRef.current.close(); } catch (e) {}
+        wsRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -47,20 +154,55 @@ export default function App() {
       }
       mediaRecorderRef.current = null;
     }
+    if (analysisTimeoutRef.current) {
+      clearTimeout(analysisTimeoutRef.current);
+      analysisTimeoutRef.current = null;
+    }
   };
 
-  const analyzeConversation = async (currentUtterances) => {
+  // Debounced analysis for new utterances
+  const scheduleAnalysisForNewUtterance = (newUtterance, allUtterances) => {
+    // Clear any existing timeout
+    if (analysisTimeoutRef.current) {
+      clearTimeout(analysisTimeoutRef.current);
+    }
+    
+    // Schedule new analysis
+    analysisTimeoutRef.current = setTimeout(() => {
+      analyzeNewUtterance(newUtterance, allUtterances);
+    }, 500);
+  };
+
+  const analyzeNewUtterance = async (newUtterance, allUtterances) => {
     try {
+      // Only analyze Speaker 0 utterances
+      if (newUtterance.speaker !== 0) {
+        return;
+      }
+
+      // Don't re-analyze the same utterance
+      if (lastAnalyzedUtterance && 
+          lastAnalyzedUtterance.text === newUtterance.text && 
+          lastAnalyzedUtterance.timestamp === newUtterance.timestamp) {
+        console.log('🚫 Utterance already analyzed');
+        return;
+      }
+
       setIsAnalyzing(true);
       
-      // Format utterances for backend
-      const transcriptions = currentUtterances.map(utterance => ({
+      // Format all utterances for context
+      const transcriptions = allUtterances.map(utterance => ({
         speaker: utterance.speaker,
         text: utterance.text
       }));
 
-      console.log('🧠 Analyzing conversation with', transcriptions.length, 'utterances');
-      console.log('📤 Sending to backend:', { transcriptions, emotions: [], eval_metric: evalMetric });
+      console.log('🧠 Analyzing new utterance:', newUtterance.text);
+      console.log('📤 Sending to backend:', { 
+        transcriptions, 
+        new_text: newUtterance.text, 
+        emotions: [], 
+        eval_metric: evalMetric 
+      });
 
       const response = await fetch('http://127.0.0.1:5000/analyze_conversation', {
         method: 'POST',
@@ -69,7 +211,8 @@ export default function App() {
         },
         body: JSON.stringify({
           transcriptions: transcriptions,
-          emotions: [],
+          new_text: newUtterance.text,
+          emotions: latestEmotions.current,
           eval_metric: evalMetric
         })
       });
@@ -82,13 +225,27 @@ export default function App() {
       
       if (result.success) {
         console.log('📊 Analysis result:', result);
+        
         setEvaluationScore(result.score);
-        setEvaluationAnalysis(result.analysis);
+        
+        // Add new moves with the utterance reference
+        if (result.moves && result.moves.length > 0) {
+          const movesWithUtterance = result.moves.map(move => ({
+            ...move,
+            utterance: newUtterance // Store reference to the utterance
+          }));
+          
+          setMoves(prevMoves => [...prevMoves, ...movesWithUtterance]);
+        }
+        
+        // Mark this utterance as analyzed
+        setLastAnalyzedUtterance(newUtterance);
+        setEvaluationAnalysis(''); // No longer using analysis
       } else {
         console.error('❌ Analysis error:', result.error);
       }
     } catch (error) {
-      console.error('❌ Failed to analyze conversation:', error);
+      console.error('❌ Failed to analyze utterance:', error);
     } finally {
       setIsAnalyzing(false);
     }
@@ -101,6 +258,8 @@ export default function App() {
       setPartialTranscript('');
       setEvaluationScore(50);
       setEvaluationAnalysis('');
+      setMoves([]);
+      setLastAnalyzedUtterance(null);
       setIsAnalyzing(false);
       setStatus('Getting API key...');
 
@@ -172,8 +331,11 @@ export default function App() {
               if (groupedUtterances.length > 0) {
                 setUtterances(prev => {
                   const newUtterances = [...prev, ...groupedUtterances];
-                  // Trigger analysis after adding new utterances
-                  setTimeout(() => analyzeConversation(newUtterances), 500);
+                  // Trigger analysis for the last new utterance (if it's Speaker 0)
+                  const lastNewUtterance = groupedUtterances[groupedUtterances.length - 1];
+                  if (lastNewUtterance && lastNewUtterance.speaker === 0) {
+                    scheduleAnalysisForNewUtterance(lastNewUtterance, newUtterances);
+                  }
                   return newUtterances;
                 });
               }
@@ -187,8 +349,10 @@ export default function App() {
               };
               setUtterances(prev => {
                 const newUtterances = [...prev, newUtterance];
-                // Trigger analysis after adding new utterance
-                setTimeout(() => analyzeConversation(newUtterances), 500);
+                // Trigger analysis for the new utterance (if it's Speaker 0)
+                if (newUtterance.speaker === 0) {
+                  scheduleAnalysisForNewUtterance(newUtterance, newUtterances);
+                }
                 return newUtterances;
               });
             }
@@ -332,8 +496,127 @@ export default function App() {
     return 'Poor';
   };
 
+  // Chess move type color mapping
+  const getMoveColor = (moveType) => {
+    const colors = {
+      'BRILLIANT': 'bg-teal-200 text-teal-800 border-teal-300',
+      'GREAT': 'bg-blue-200 text-blue-800 border-blue-300',
+      'BEST': 'bg-green-200 text-green-800 border-green-300',
+      'EXCELLENT': 'bg-green-100 text-green-700 border-green-200',
+      'GOOD': 'bg-green-50 text-green-600 border-green-100',
+      'BOOK': 'bg-amber-100 text-amber-700 border-amber-200',
+      'INACCURACY': 'bg-yellow-200 text-yellow-800 border-yellow-300',
+      'MISTAKE': 'bg-orange-200 text-orange-800 border-orange-300',
+      'BLUNDER': 'bg-red-200 text-red-800 border-red-300',
+      'MISSED_WIN': 'bg-yellow-300 text-yellow-900 border-yellow-400'
+    };
+    return colors[moveType] || 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  // Get move symbol
+  const getMoveSymbol = (moveType) => {
+    const symbols = {
+      'BRILLIANT': '!!',
+      'GREAT': '!',
+      'BEST': '★',
+      'EXCELLENT': '👍',
+      'GOOD': '✔️',
+      'BOOK': '📖',
+      'INACCURACY': '?!',
+      'MISTAKE': '?',
+      'BLUNDER': '??',
+      'MISSED_WIN': '—'
+    };
+    return symbols[moveType] || '';
+  };
+
+  // Function to highlight text with moves using utterance reference
+  const highlightText = (text, utterance, speaker) => {
+    // Only highlight Speaker 0 utterances
+    if (speaker !== 0) {
+      return <span>{text}</span>;
+    }
+
+    // Find moves for this specific utterance by matching the utterance reference
+    const utteranceMoves = moves.filter(move => 
+      move.utterance && 
+      move.utterance.text === utterance.text && 
+      move.utterance.timestamp === utterance.timestamp
+    );
+    
+    if (!utteranceMoves || utteranceMoves.length === 0) {
+      return <span>{text}</span>;
+    }
+
+    const parts = [];
+    let lastIndex = 0;
+
+    // Sort moves by position in text to handle overlapping highlights
+    const sortedMoves = utteranceMoves
+      .map(move => ({
+        ...move,
+        index: text.indexOf(move.text)
+      }))
+      .filter(move => move.index !== -1)
+      .sort((a, b) => a.index - b.index);
+
+    sortedMoves.forEach((move, i) => {
+      // Add text before highlight
+      if (move.index > lastIndex) {
+        parts.push(
+          <span key={`text-${i}`}>
+            {text.substring(lastIndex, move.index)}
+          </span>
+        );
+      }
+
+      // Add highlighted text with tooltip
+      parts.push(
+        <span
+          key={`highlight-${i}`}
+          className={`inline-block px-2 py-1 rounded border ${getMoveColor(move.move_type)} cursor-help relative`}
+          title={`${move.move_type} ${getMoveSymbol(move.move_type)} - ${move.reason}`}
+        >
+          {move.text}
+          <span className="ml-1 text-xs font-bold opacity-75">
+            {getMoveSymbol(move.move_type)}
+          </span>
+          <span className="absolute -top-1 -right-1 text-xs font-semibold bg-white px-1 rounded shadow-sm border">
+            {move.move_type}
+          </span>
+        </span>
+      );
+
+      lastIndex = move.index + move.text.length;
+    });
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(
+        <span key="text-end">
+          {text.substring(lastIndex)}
+        </span>
+      );
+    }
+
+    return <span>{parts}</span>;
+  };
+
   return (
+    
     <div className="min-h-screen p-8">
+      <div className="fixed top-0 left-0 opacity-0 pointer-events-none">
+        <Webcam 
+          ref={webcamRef}
+          audio={false}
+          screenshotFormat="image/jpeg"
+          videoConstraints={{
+            width: 1280,
+            height: 720,
+            facingMode: "user"
+          }}
+        />
+      </div>
       {/* Evaluation Bar at Top */}
       <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 p-4 z-50">
         <div className="max-w-6xl mx-auto">
@@ -350,18 +633,7 @@ export default function App() {
             <span className="text-sm font-semibold text-gray-700 min-w-[80px]">
               {evaluationScore}/100
             </span>
-            {isAnalyzing && (
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <span className="text-sm text-blue-600">Analyzing...</span>
-              </div>
-            )}
           </div>
-          {evaluationAnalysis && (
-            <div className="mt-2 text-sm text-gray-600 bg-gray-50 p-2 rounded">
-              <strong>Analysis:</strong> {evaluationAnalysis}
-            </div>
-          )}
         </div>
       </div>
 
@@ -413,19 +685,23 @@ export default function App() {
             
             {/* Display completed utterances with speaker labels */}
             <div className="space-y-3 mb-4">
-              {utterances.map((utterance, index) => (
-                <div key={index} className="flex gap-3 p-3 rounded-lg bg-gray-50">
-                  <span className="font-semibold text-blue-600 min-w-[100px] flex-shrink-0">
-                    Speaker {utterance.speaker}:
-                  </span>
-                  <span className="text-gray-700 flex-1">{utterance.text}</span>
-                  {utterance.start !== undefined && (
-                    <span className="text-xs text-gray-400 flex-shrink-0">
-                      {utterance.start.toFixed(1)}s
+              {utterances.map((utterance, index) => {
+                return (
+                  <div key={index} className="flex gap-3 p-3 rounded-lg bg-gray-50">
+                    <span className="font-semibold text-blue-600 min-w-[100px] flex-shrink-0">
+                      Speaker {utterance.speaker}:
                     </span>
-                  )}
-                </div>
-              ))}
+                    <span className="text-gray-700 flex-1">
+                      {highlightText(utterance.text, utterance, utterance.speaker)}
+                    </span>
+                    {utterance.start !== undefined && (
+                      <span className="text-xs text-gray-400 flex-shrink-0">
+                        {utterance.start.toFixed(1)}s
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Show current partial transcript */}

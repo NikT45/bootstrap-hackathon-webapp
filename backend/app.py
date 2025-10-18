@@ -14,61 +14,127 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 
-# Recieve emotions and transcriptions from the frontend ]
-# Recieve the eval metric (what are we evaluating the conversation on?)
-# Return portions of the conversation related to the eval metric, and classify them in chess terms. 
-def analyze_conversation_response(emotions, transcriptions, eval_metric):
+# Analyze only the newest Speaker 0 text while using full conversation as context
+def analyze_conversation_response(emotions, transcriptions, eval_metric, new_text=None):
     try:
         print(f"🔑 OpenAI API Key exists: {bool(os.getenv('OPENAI_API_KEY'))}")
         # Initialize the OpenAI client
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        context = f"""
-    You are analyzing a conversation in chess terms. The situation is: {eval_metric}
-    
-    Speaker 0 is the person being evaluated. Speaker 1's emotions: {emotions}
-    
-    Analyze each significant exchange and classify it as:
-    - BLUNDER: Major social mistake, offensive, inappropriate
-    - EXCELLENT MOVE: Perfect response, great question, smooth
-    - DUBIOUS MOVE: Questionable choice, awkward, poor timing
-    - TACTICAL: Strategic response, calculated approach
-    - POSITIONAL: Building rapport, setting up opportunities
-    - DEFENSIVE: Recovering from mistake, damage control
-    - AGGRESSIVE: Direct approach, pushing boundaries appropriately
-    
-    For each classification, explain:
-    1. What specific part of the conversation led to this classification
-    2. Why it's good/bad in the context of {eval_metric}
-    3. What emotions from speaker 1 might have influenced this
-    
-    IMPORTANT: At the end of your analysis, provide a numerical score from 0-100 where:
-    - 0-20: Aggressive/Defensive (poor performance, major mistakes)
-    - 21-40: Dubious moves (questionable choices, awkward timing)
-    - 41-60: Tactical/Positional (strategic but not exceptional)
-    - 61-80: Good moves (solid performance, good responses)
-    - 81-100: Excellent moves (outstanding performance, perfect responses)
-    
-    Format your response as:
-    ANALYSIS: [your detailed analysis here]
-    SCORE: [number between 0-100]
-    """
-        conversation_analysis = "\n".join([f"Speaker{turn['speaker']}: {turn['text']}" for turn in transcriptions])
-        print(f"📝 Conversation analysis: {conversation_analysis}")
+        # If no new text to analyze, return empty
+        if not new_text or not new_text.strip():
+            return {"score": 50, "moves": []}
+        
+        print(f"📝 New text to analyze: '{new_text}'")
+        
+        # Build context with full conversation for reference
+        conversation_context = ""
+        if transcriptions:
+            conversation_context = f"\n\nFull conversation context (for reference only, do not analyze):\n"
+            conversation_context += "\n".join([f"Speaker {turn['speaker']}: {turn['text']}" for turn in transcriptions])
+        
+        context = f"""You are analyzing Speaker 0's conversation performance in chess move terms for: {eval_metric}
+
+Speaker 1's emotions during the conversation: {emotions}
+
+Analyze ONLY the new text provided below using these chess move types:
+- BRILLIANT: Exceptional, perfect response that the other speaker responds well to. 
+    - Example: Date conversation: "You are so beautiful, your smile is so contagious"
+- GREAT: Very good response, well-timed and effective
+- BEST: Optimal choice in the situation
+- EXCELLENT: Strong response, clearly beneficial
+- GOOD: Solid choice, generally positive
+- BOOK: Standard, intro level, expected response (neutral)
+    - Example: "Hey how are you?", "I'm doing well, thanks for asking"
+- INACCURACY: Minor mistake, slightly off but not harmful
+- MISTAKE: Clear error, poor choice with negative impact
+    - Example: Interview conversation: "I didn’t have time to look at your website."
+- BLUNDER: Major error, very damaging to the conversation
+    - Example: Date conversation: "You look really different from your pictures."
+- MISSED_WIN: Failed to capitalize on a great opportunity
+    - Example: Date conversation: "Speaker 1: Do you want to go to the movies?" Speaker 0: "I'm not sure, I have a lot of work to do."
+
+EXAMPLES:
+
+Date
+
+- You look way different from your pictures. (Negative)
+
+- My ex used to love this restaurant. (Negative)
+
+- You have a really genuine laugh. (Positive)
+
+- I really enjoy talking to you. (Positive)
+
+Interview
+
+- I didn’t have time to look at your website. (Negative)
+
+- I’m excited about this role — it aligns with what I’ve been building toward. (Positive)
+
+Team Meeting
+
+- That idea doesn’t make sense. (Negative)
+
+- That’s an interesting approach — maybe we can build on that. (Positive)
+
+Friend Chat
+
+- You’re overreacting. (Negative)
+
+- That sounds really tough — want to talk about it? (Positive)
+
+
+
+For the new text, return:
+1. The exact substring that represents the key part of the move
+2. The move type classification
+3. Brief reason (1-2 words max)
+
+IMPORTANT: 
+- Only analyze the NEW TEXT provided below, not the conversation context
+- Return the exact substring that should be highlighted
+- You can identify multiple moves within the same text if appropriate
+- Provide an overall score from 0-100 based on the move quality
+
+Format your response as JSON only, no other text:
+{{
+    "moves": [
+        {{
+            "text": "exact substring to highlight",
+            "move_type": "MOVE_TYPE", 
+            "reason": "brief reason"
+        }}
+    ],
+    "score": 75
+}}{conversation_context}"""
         
         response = client.chat.completions.create(
-            model = "gpt-4o-mini",
+            model = "gpt-5-nano",
             messages = [
                 {"role":"system", "content":context},
-                {"role":"user", "content": f"Analyze the following conversation:\n\n {conversation_analysis}"}
+                {"role":"user", "content": f"Analyze ONLY this new text from Speaker 0:\n\n{new_text}"}
             ],
-            # Temperature is the randomness of the response, 0.0 is the most deterministic, 1.0 is the most random
-            temperature = 0.2
         )
-        return response.choices[0].message.content
+        
+        # Parse JSON response
+        import json
+        response_text = response.choices[0].message.content
+        print(f"🤖 GPT Response: {response_text}")
+        
+        # Extract JSON from response (in case there's extra text)
+        start_idx = response_text.find('{')
+        end_idx = response_text.rfind('}') + 1
+        if start_idx != -1 and end_idx != 0:
+            json_str = response_text[start_idx:end_idx]
+            result = json.loads(json_str)
+            return result
+        else:
+            return {"score": 50, "moves": []}
+            
     except Exception as e:
         print(f"❌ Error in analyze_conversation_response: {str(e)}")
-        return f"ANALYSIS: Error analyzing conversation: {str(e)}\nSCORE: 50"
+        return {"score": 50, "moves": []}
         
 @app.route('/analyze_conversation', methods=['POST'])
 def analyze_conversation():
@@ -80,39 +146,24 @@ def analyze_conversation():
         emotions = data.get('emotions', [])
         transcriptions = data.get('transcriptions', [])
         eval_metric = data.get('eval_metric', 'general conversation')
+        new_text = data.get('new_text', '')
         
         print(f"🎭 Emotions: {emotions}")
-        print(f"💬 Transcriptions: {transcriptions}")
+        print(f"💬 Transcriptions: {len(transcriptions)} total")
         print(f"📊 Eval metric: {eval_metric}")
+        print(f"📝 New text: '{new_text}'")
 
-        response_text = analyze_conversation_response(emotions, transcriptions, eval_metric)
-        print(f"🤖 GPT Response: {response_text}")
+        response_data = analyze_conversation_response(emotions, transcriptions, eval_metric, new_text)
+        print(f"🤖 GPT Response: {response_data}")
         
-        # Parse the response to extract analysis and score
-        lines = response_text.split('\n')
-        analysis = ""
-        score = 50  # Default score if parsing fails
+        score = response_data.get('score', 50)
+        moves = response_data.get('moves', [])
         
-        for line in lines:
-            if line.startswith('ANALYSIS:'):
-                analysis = line.replace('ANALYSIS:', '').strip()
-            elif line.startswith('SCORE:'):
-                try:
-                    score = int(line.replace('SCORE:', '').strip())
-                    # Ensure score is within valid range
-                    score = max(0, min(100, score))
-                except ValueError:
-                    score = 50  # Default if parsing fails
-        
-        # If no ANALYSIS: line found, use the entire response as analysis
-        if not analysis:
-            analysis = response_text
-        
-        print(f"✅ Returning response - Score: {score}, Analysis: {analysis[:100]}...")
+        print(f"✅ Returning response - Score: {score}, Moves: {len(moves)}")
         return jsonify({
             'success': True, 
-            'analysis': analysis, 
             'score': score,
+            'moves': moves,
             'eval_metric': eval_metric
         })
     except Exception as e:
