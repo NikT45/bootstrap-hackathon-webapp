@@ -235,7 +235,7 @@ export default function App() {
         eval_metric: evalMetric 
       });
 
-      const response = await fetch('https://bootstrapbackend.onrender.co/analyze_conversation', {
+      const response = await fetch('https://bootstrapbackend.onrender.com/analyze_conversation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
