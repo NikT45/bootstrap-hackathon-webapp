@@ -695,7 +695,7 @@ export default function App() {
       <div className="flex items-center justify-center px-4">
         <div className="text-center max-w-4xl w-full">
 
-          <h1 className="text-3xl font-bold mb-8">Real-time Speaker Diarization</h1>
+          <h1 className="text-3xl font-bold mb-8">Closr - The AI Conversation Coach</h1>
           <p className="text-gray-600 mb-8">Powered by Deepgram&apos;s live streaming API with AI conversation analysis</p>
 
         {!isRecording ? (
