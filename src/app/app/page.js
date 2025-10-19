@@ -660,36 +660,41 @@ export default function App() {
           }}
         />
       </div>
-      {/* Evaluation Bar at Top */}
-      <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 p-4 z-50">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 min-w-[200px]">
-              <input
-                type="text"
-                value={evalMetric}
-                onChange={(e) => setEvalMetric(e.target.value)}
-                className="text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[100px]"
-                placeholder="Enter metric..."
-              />
-              <span className="text-sm font-medium text-gray-700">Score:</span>
+      {/* Evaluation Bar - Always Visible */}
+      <div className="w-full p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input
+                  type="text"
+                  value={evalMetric}
+                  onChange={(e) => setEvalMetric(e.target.value)}
+                  className="text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex-1 sm:flex-none sm:min-w-[100px]"
+                  placeholder="Enter metric..."
+                />
+                <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Score:</span>
+              </div>
+              <div className="flex items-center gap-3 w-full sm:flex-1">
+                <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-500 ${getScoreColor(evaluationScore)}`}
+                    style={{ width: `${evaluationScore}%` }}
+                  />
+                </div>
+                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                  {evaluationScore}/100
+                </span>
+              </div>
             </div>
-            <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-500 ${getScoreColor(evaluationScore)}`}
-                style={{ width: `${evaluationScore}%` }}
-              />
-            </div>
-            <span className="text-sm font-semibold text-gray-700 min-w-[80px]">
-              {evaluationScore}/100
-            </span>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="pt-20 flex items-center justify-center">
+      <div className="flex items-center justify-center px-4">
         <div className="text-center max-w-4xl w-full">
+
           <h1 className="text-3xl font-bold mb-8">Real-time Speaker Diarization</h1>
           <p className="text-gray-600 mb-8">Powered by Deepgram&apos;s live streaming API with AI conversation analysis</p>
 
