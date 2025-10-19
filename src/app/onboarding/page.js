@@ -22,8 +22,8 @@ export default function Onboarding() {
       // Stop the stream after getting permission
       stream.getTracks().forEach(track => track.stop());
 
-      // Navigate to app page if permissions granted
-      router.push('/app');
+      // Navigate to situations page if permissions granted
+      router.push('/onboarding/situations');
     } catch (err) {
       console.error('Permission denied:', err);
       setError('Please grant camera and microphone access to continue.');

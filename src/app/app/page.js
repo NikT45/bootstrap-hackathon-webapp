@@ -11,6 +11,29 @@ export default function App() {
   const [evaluationAnalysis, setEvaluationAnalysis] = useState('');
   const [evalMetric, setEvalMetric] = useState('romance');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Map situations to eval metrics
+  const situationToMetric = {
+    'dating': 'romance',
+    'colleagues': 'professional',
+    'strangers': 'social',
+    'boss': 'professional',
+    'sales': 'persuasion',
+    'interview': 'professional'
+  };
+
+  // Load eval metric from onboarding selection
+  useEffect(() => {
+    try {
+      const selectedSituation = localStorage.getItem('onboarding.situation');
+      if (selectedSituation && situationToMetric[selectedSituation]) {
+        setEvalMetric(situationToMetric[selectedSituation]);
+        console.log(`📊 Set eval metric to '${situationToMetric[selectedSituation]}' based on situation '${selectedSituation}'`);
+      }
+    } catch (error) {
+      console.warn('Could not load situation from localStorage:', error);
+    }
+  }, []);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [moves, setMoves] = useState([]);
@@ -212,7 +235,7 @@ export default function App() {
         eval_metric: evalMetric 
       });
 
-      const response = await fetch('http://127.0.0.1:5000/analyze_conversation', {
+      const response = await fetch('https://bootstrapbackend.onrender.com/analyze_conversation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -641,9 +664,16 @@ export default function App() {
       <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 p-4 z-50">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-gray-700 min-w-[120px]">
-              {evalMetric.charAt(0).toUpperCase() + evalMetric.slice(1)} Score:
-            </span>
+            <div className="flex items-center gap-2 min-w-[200px]">
+              <input
+                type="text"
+                value={evalMetric}
+                onChange={(e) => setEvalMetric(e.target.value)}
+                className="text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[100px]"
+                placeholder="Enter metric..."
+              />
+              <span className="text-sm font-medium text-gray-700">Score:</span>
+            </div>
             <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
               <div 
                 className={`h-full transition-all duration-500 ${getScoreColor(evaluationScore)}`}
