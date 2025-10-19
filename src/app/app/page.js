@@ -661,7 +661,13 @@ export default function App() {
         />
       </div>
       {/* Evaluation Bar - Always Visible */}
-      <div className="w-full p-4">
+           {/* Main Content */}
+      <div className="flex items-center justify-center px-4">
+        <div className="text-center max-w-4xl w-full">
+
+          <h1 className="text-3xl font-bold mb-8">Closr - The AI Conversation Coach</h1>
+          <p className="text-gray-600 mb-8">Powered by Deepgram&apos;s live streaming API with AI conversation analysis</p>
+          <div className="w-full p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
@@ -690,13 +696,6 @@ export default function App() {
           </div>
         </div>
       </div>
-
-      {/* Main Content */}
-      <div className="flex items-center justify-center px-4">
-        <div className="text-center max-w-4xl w-full">
-
-          <h1 className="text-3xl font-bold mb-8">Closr - The AI Conversation Coach</h1>
-          <p className="text-gray-600 mb-8">Powered by Deepgram&apos;s live streaming API with AI conversation analysis</p>
 
         {!isRecording ? (
           <button
