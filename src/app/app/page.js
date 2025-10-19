@@ -669,31 +669,7 @@ export default function App() {
           <p className="text-gray-600 mb-8">Powered by Deepgram&apos;s live streaming API with AI conversation analysis</p>
           <div className="w-full p-4">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <input
-                  type="text"
-                  value={evalMetric}
-                  onChange={(e) => setEvalMetric(e.target.value)}
-                  className="text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex-1 sm:flex-none sm:min-w-[100px]"
-                  placeholder="Enter metric..."
-                />
-                <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Score:</span>
-              </div>
-              <div className="flex items-center gap-3 w-full sm:flex-1">
-                <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-500 ${getScoreColor(evaluationScore)}`}
-                    style={{ width: `${evaluationScore}%` }}
-                  />
-                </div>
-                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
-                  {evaluationScore}/100
-                </span>
-              </div>
-            </div>
-          </div>
+       
         </div>
       </div>
 
@@ -707,7 +683,7 @@ export default function App() {
         ) : (
           <button
             onClick={stopConversation}
-            className="px-8 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors duration-200 shadow-md hover:shadow-lg"
+            className="px-8 mb-2 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors duration-200 shadow-md hover:shadow-lg"
           >
             Stop Recording
           </button>
@@ -732,9 +708,34 @@ export default function App() {
           </div>
         )}
 
+        <div className="bg-white border border-gray-200 rounded-lg p-4 mt-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input
+                  type="text"
+                  value={evalMetric}
+                  onChange={(e) => setEvalMetric(e.target.value)}
+                  className="text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex-1 sm:flex-none sm:min-w-[100px]"
+                  placeholder="Enter metric..."
+                />
+                <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Score:</span>
+              </div>
+              <div className="flex items-center gap-3 w-full sm:flex-1">
+                <div className="flex-1 bg-gray-200 rounded-full h-6 relative overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-500 ${getScoreColor(evaluationScore)}`}
+                    style={{ width: `${evaluationScore}%` }}
+                  />
+                </div>
+                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                  {evaluationScore}/100
+                </span>
+              </div>
+            </div>
+          </div>
         {/* Live transcription with speaker labels */}
         {(utterances.length > 0 || partialTranscript) && (
-          <div className="mt-6 bg-white border border-gray-200 rounded-lg p-6 text-left max-h-96 overflow-y-auto" ref={transcriptionContainerRef}>
+          <div className="mt-6 bg-white border border-gray-200 rounded-lg py-6 px-2 text-left max-h-96 overflow-y-auto" ref={transcriptionContainerRef}>
             <h2 className="text-xl font-semibold mb-4">Live Transcription with Speakers:</h2>
             
             {/* Display completed utterances with speaker labels */}
