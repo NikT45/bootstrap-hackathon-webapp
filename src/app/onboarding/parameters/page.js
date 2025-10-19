@@ -1,9 +1,9 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 
-export default function ParametersPage() {
+function ParametersContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [situation, setSituation] = useState('');
@@ -75,5 +75,13 @@ export default function ParametersPage() {
         </button>
       </div>
     </main>
+  );
+}
+
+export default function ParametersPage() {
+  return (
+    <Suspense fallback={<div style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>Loading...</div>}>
+      <ParametersContent />
+    </Suspense>
   );
 }
